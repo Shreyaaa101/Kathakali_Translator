@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Sanskrit Translation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .input-group label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            min-width: 200px;
+        }
+
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-message {
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .status-message.info { color: #2196F3; }
+        .status-message.success { color: #4CAF50; }
+        .status-message.warning { color: #FF9800; }
+        .status-message.error { color: #f44336; }
+
+        .progress-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 6px;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        .translation-display {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            min-height: 300px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .sentence-container {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .sentence-container.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .sanskrit-text {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 25px;
+            line-height: 1.4;
+            font-weight: 500;
+            border-left: 4px solid #667eea;
+            padding-left: 20px;
+        }
+
+        .english-text {
+            font-size: 1.4rem;
+            color: #666;
+            font-style: italic;
+            line-height: 1.5;
+            border-left: 4px solid #764ba2;
+            padding-left: 20px;
+        }
+
+        .sentence-counter {
+            margin-top: 30px;
+            font-size: 1rem;
+            color: #888;
+            font-weight: 600;
+        }
+
+        .placeholder-text {
+            color: #aaa;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .placeholder-icon {
+            font-size: 3rem;
+            opacity: 0.5;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .connected { background: #4CAF50; }
+        .disconnected { background: #f44336; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .control-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .translation-display {
+                padding: 25px;
+            }
+            
+            .sanskrit-text {
+                font-size: 1.4rem;
+            }
+            
+            .english-text {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        Connecting...
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🕉️ Real-Time Sanskrit Translation</h1>
+            <p>Experience devotional Sanskrit audio transcribed and translated in real-time</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="input-group">
+                    <label for="audioFile">Audio File:</label>
+                    <input type="text" id="audioFile" value="audio.mp3" placeholder="Enter audio file name">
+                </div>
+                <div class="input-group">
+                    <label for="delay">Delay (seconds):</label>
+                    <input type="number" id="delay" value="3" min="1" max="10" placeholder="3">
+                </div>
+            </div>
+            <div class="control-group">
+                <button id="startBtn" onclick="startProcessing()">Start Translation</button>
+                <button id="stopBtn" onclick="stopProcessing()" disabled>Stop</button>
+                <button id="testBtn" onclick="testConnection()">Test Connection</button>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-message" id="statusMessage">Ready to start translation...</div>
+            <div class="progress-container" style="display: none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="translation-display" id="translationDisplay">
+            <div class="placeholder-text">
+                <div class="placeholder-icon">🎵</div>
+                <div>Click "Start Translation" to begin processing your Sanskrit audio</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let isConnected = false;
+        let currentSentence = null;
+
+        // Connection status handling
+        socket.on('connect', function() {
+            isConnected = true;
+            updateConnectionStatus();
+            console.log('Connected to server');
+        });
+
+        socket.on('disconnect', function() {
+            isConnected = false;
+            updateConnectionStatus();
+            console.log('Disconnected from server');
+        });
+
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            if (isConnected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'connection-status connected';
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'connection-status disconnected';
+            }
+        }
+
+        // Status message handling
+        socket.on('status', function(data) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = data.message;
+            statusEl.className = `status-message ${data.type}`;
+            
+            const progressContainer = document.querySelector('.progress-container');
+            if (data.type === 'info' && data.message.includes('Processing')) {
+                progressContainer.style.display = 'block';
+            }
+        });
+
+        // Real-time sentence updates
+        socket.on('sentence_update', function(data) {
+            displaySentence(data.sanskrit, data.english, data.index, data.total);
+            updateProgress(data.progress);
+        });
+
+        // Processing complete
+        socket.on('processing_complete', function(data) {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.querySelector('.progress-container').style.display = 'none';
+        });
+
+        function displaySentence(sanskrit, english, index, total) {
+            const displayEl = document.getElementById('translationDisplay');
+            
+            // Create new sentence container
+            const sentenceContainer = document.createElement('div');
+            sentenceContainer.className = 'sentence-container';
+            
+            sentenceContainer.innerHTML = `
+                <div class="sanskrit-text">${sanskrit}</div>
+                <div class="english-text">${english}</div>
+                <div class="sentence-counter">Sentence ${index} of ${total}</div>
+            `;
+            
+            // Clear previous content and add new sentence
+            displayEl.innerHTML = '';
+            displayEl.appendChild(sentenceContainer);
+            
+            // Trigger animation
+            setTimeout(() => {
+                sentenceContainer.classList.add('visible');
+            }, 100);
+        }
+
+        function updateProgress(percentage) {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = `${percentage}%`;
+        }
+
+        function startProcessing() {
+            const audioFile = document.getElementById('audioFile').value;
+            const delay = parseInt(document.getElementById('delay').value);
+            
+            if (!audioFile.trim()) {
+                alert('Please enter an audio file name');
+                return;
+            }
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            socket.emit('start_processing', {
+                audio_file: audioFile,
+                delay: delay
+            });
+        }
+
+        function stopProcessing() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            
+            socket.emit('stop_processing');
+        }
+
+        function testConnection() {
+            socket.emit('test_connection');
+        }
+
+        // Initialize
+        updateConnectionStatus();
+        
+        // Load available audio files on page load
+        socket.on('connect', function() {
+            isConnected = true;
+            updateConnectionStatus();
+            console.log('Connected to server');
+            refreshAudioFiles(); // Load audio files when connected
+        });
+    </script>
+</body>
+</html>
