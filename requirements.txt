@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 flask==2.3.3
 flask-socketio==5.3.6
 python-socketio==5.8.0
 openai>=1.35.0
 python-dotenv==1.0.0
 requests==2.31.0
+=======
+pip install uvicorn fastapi deep_translator
+>>>>>>> d64407a7749ab58faa0eac751a13beedbedf6a50
